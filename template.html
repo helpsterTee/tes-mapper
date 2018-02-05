@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<head>
+  <link rel="stylesheet" href="https://npmcdn.com/leaflet@0.7.7/dist/leaflet.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="https://npmcdn.com/leaflet@0.7.7/dist/leaflet.js"></script>
+  <script src="./MovingMarker.js"></script>
+</head>
+<body>
+   <div id="mapid"></div>
+   <div>
+     <span>Playback Controls:</span>
+     <button onClick="startMovement();">Start</button> Speed: <input id="multiplier" type="text" value="1" /><br /> <input type="range" id="pos" min="0" max="10" onchange="updateFromSlider();" oninput="updateFromSlider();">
+     <button onClick="pauseMovement();">Pause</button>
+     <button onClick="resetMovement();">Reset</button><br />
+     <input onClick="updatePolygon();" type="checkbox" id="showPolyline" /> Show movement path
+   </div>
+   <script type="text/javascript">
+     /* the next two values are filled by python */
+     var locationData = _REPLACE_POS_;
+     var timediffData = _REPLACE_TIME_;
+     var multimap = _REPLACE_MULTIMAP_;
+     var names = _REPLACE_MULTINAMES_;
+
+     var colors = ["red", "blue", "green", "black", "yellow", "orange"]
+
+      var mymap = L.map('mapid').setView([41.597712, -88.0600767999], 13);
+      var osm = L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+          attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+          maxZoom: 40,
+          id: 'mapbox.streets',
+          accessToken: '_ACCESS_TOKEN_'
+      }).addTo(mymap);
+
+      var sat = L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+          attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+          maxZoom: 40,
+
+          id: 'mapbox.satellite',
+          accessToken: '_ACCESS_TOKEN_'
+      });
+
+      var baseMaps = {
+          "OpenStreetMap": osm,
+          "Satellite": sat
+      };
+
+      var overlays =  {
+      };
+      L.control.layers(baseMaps, overlays, {position: 'bottomleft'}).addTo(mymap);
+
+      var myMovingMarkers = [];
+      var myPolyLines = [];
+
+      var slider = document.getElementById('pos')
+      var maxLocDat = 0;
+
+      if (multimap === true) {
+        locationData.forEach(function (item, index, array) {
+          var movements = L.polyline(item, {
+            color: colors[index%colors.length],
+            weight: 1,
+            alpha: 0.5
+          });
+          myPolyLines.push(movements);
+         if (item.length > maxLocDat) {
+           maxLocDat = item.length;
+         }
+         myMovingMarkers.push(L.Marker.movingMarker(item, timediffData[index]).addTo(mymap));
+         myMovingMarkers[index].options.slider = slider;
+         myMovingMarkers[index].bindPopup(names[index]);
+        });
+      } else {
+        var movements = L.polyline(locationData, {
+          color: 'red',
+          weight: 1,
+          alpha: 0.5
+        });
+        myPolyLines.push(movements);
+        maxLocDat = locationData.length;
+        myMovingMarkers.push(L.Marker.movingMarker(locationData, timediffData).addTo(mymap));
+        myMovingMarkers[0].bindPopup(names[0]);
+        myMovingMarkers[0].options.slider = slider;
+      }
+
+      mymap.fitBounds(myPolyLines[0].getBounds());
+      slider.max = maxLocDat;
+      slider.value = 0;
+
+      /* functions */
+      var isStarted = false;
+      var isPaused = false;
+      function startMovement() {
+        if (!isStarted) {
+          myMovingMarkers.forEach(function (item, index, array) {
+            item.options.speedMultiplier = document.getElementById('multiplier').value;
+            item.start();
+          })
+          isStarted = true;
+        }
+      }
+      function pauseMovement() {
+        if (!isPaused) {
+          myMovingMarkers.forEach(function(item, index, data) {
+            item.pause();
+          });
+          isPaused = true;
+        } else {
+          myMovingMarkers.forEach(function(item, index, data) {
+            item.resume();
+          });
+          isPaused = false;
+        }
+      }
+      function resetMovement() {
+        myMovingMarkers.forEach(function(item, index, data) {
+          item.stop();
+        });
+        slider.value = 0;
+        isStarted = false;
+      }
+      function updateFromSlider() {
+        myMovingMarkers.forEach(function(item, index, data) {
+          if (multimap) {
+            if (slider.value < locationData[index].length) {
+                item.moveToIndex(slider.value);
+            }
+          } else {
+            if (slider.value < locationData.length) {
+                item.moveToIndex(slider.value);
+            }
+          }
+        });
+      }
+      function updatePolygon() {
+        var cb = document.getElementById('showPolyline');
+        if (cb.checked) {
+          myPolyLines.forEach(function (item, index, array) {
+              item.addTo(mymap);
+          });
+        } else {
+
+          myPolyLines.forEach(function (item, index, array) {
+              mymap.removeLayer(item);
+          });
+        }
+      }
+   </script>
+</body>
+</html>
